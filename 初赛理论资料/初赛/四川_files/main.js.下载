@@ -1,0 +1,231 @@
+/*!
+ * Zving JS Library
+ * Copyright (c) 2012, zving.com Inc. All rights reserved.
+ * Thanks to: jQuery.UI,Ext.JS,Tangram
+ */
+!function () {
+	if (window.Zving) {
+		return;
+	}
+	var z = window.Zving = {
+		version : 2.1
+	};
+	var getCurrentScript = function (base) {
+		if (document.currentScript) {
+			return document.currentScript.src; //FF,Chrome
+		};
+		var stack;
+		try {
+			a.b.c(); //强制报错,以便捕获e.stack
+		} catch (e) { //safari的错误对象只有line,sourceId,sourceURL
+			stack = e.stack;
+			if (!stack && window.opera) {
+				//opera 9没有e.stack,但有e.Backtrace,但不能直接取得,需要对e对象转字符串进行抽取
+				stack = (String(e).match(/of linked script \S+/g) || []).join(" ");
+			}
+		}
+		if (stack) {
+			stack = stack.split(/[@ ]/g).pop(); //取得最后一行,最后一个空格或@之后的部分
+			stack = stack[0] === "(" ? stack.slice(1, -1) : stack.replace(/\s/, ""); //去掉换行符
+			return stack.replace(/(:\d+)?:\d+$/i, ""); //去掉行号与或许存在的出错字符起始位置
+		}
+		var nodes = (base ? document : document.head).getElementsByTagName("script"); //只在head标签中寻找
+		for (var i = nodes.length, node; node = nodes[--i]; ) {
+			if (node.readyState === "interactive") {
+				return node.src;
+			}
+		}
+		var node=nodes[nodes.length - 1];
+		return node.hasAttribute ? node.src : node.getAttribute("src", 4); 
+	}
+
+	var jspath = getCurrentScript(true);
+	var scripts = document.getElementsByTagName('script'),
+	script = document.currentScript || scripts[scripts.length - 1];
+
+	z.JSLIBPATH = jspath.substr(0, jspath.lastIndexOf('/') + 1);
+	z.CONTEXTPATH = script.getAttribute('contextpath');
+	z.Config= { namespace: 'window' };
+
+
+	if (z.JSLIBPATH.indexOf(location.protocol + '//' + location.host + '/') == 0) {
+		z.JSLIBPATH = z.JSLIBPATH.replace(location.protocol + '//' + location.host, '');
+	}
+	//再外部没配置应用路径时才使用默认路径
+	if(!z.CONTEXTPATH){
+		z.CONTEXTPATH = z.JSLIBPATH.replace(/[^\/]+\/?$/, '');
+		if(z.CONTEXTPATH.indexOf('/preview/') != -1){
+			z.CONTEXTPATH=z.CONTEXTPATH.substr(0,z.CONTEXTPATH.indexOf('preview/'));
+		}
+	}
+	/**
+	加载脚本
+	url:js文件路径，因有加z.PATH，所以路径是相对于js框架根目录开始
+	 **/
+	z.importJS = z.importJs = function (url) {
+		if (!/^\/|^\w+\:\/\//.test(url)) {
+			url = z.JSLIBPATH + url;
+		}
+		if (!document.body || document.readyState == 'loading') {
+			document.write('<script type="text/javascript" src="' + url + '"><\/script>');
+		} else {
+			z.loadJS(url);
+		}
+	};
+
+	/**
+	加载CSS文件
+	url:css文件路径，因有加z.PATH，所以路径是相对于js框架根目录开始
+	 **/
+	z.importCSS = z.importCss = function (url, win) {
+		win = win && z.isWindow(win) ? win : window;
+		var document = win.document;
+
+		if (!/^\/|^\w+\:\/\//.test(url)) {
+			url = z.JSLIBPATH + url;
+		}
+		if (!document.body || document.readyState == 'loading') {
+			document.write('<link rel="stylesheet" type="text/css" href="' + url + '" />');
+		} else {
+			z.loadCSS(url);
+		}
+
+	};
+	/**
+	异步加载脚本
+	url:js文件路径，相对于引用js框架的页面，如果要从js框架根目录开始引用需自行加上z.JSLIBPATH
+	onsuccess:js文件加载后的回调函数
+	 **/
+	z.loadJS = z.loadJs = function (url, onsuccess) {
+		var head = document.getElementsByTagName('head')[0] || document.documentElement,
+		script = document.createElement('script'),
+		done = false;
+		script.src = url;
+		script.onerror = script.onload = script.onreadystatechange = function () {
+			if (!done && (!this.readyState || this.readyState === "loaded" || this.readyState === "complete")) {
+				done = true;
+				if (onsuccess) {
+					onsuccess();
+				}
+				script.onerror = script.onload = script.onreadystatechange = null;
+				//head.removeChild(script);
+			}
+		};
+		head.appendChild(script);
+	};
+
+	/**
+	异步加载CSS文件
+	url:css文件路径，相对于引用js框架的页面，如果要从js框架根目录开始引用需自行加上z.JSLIBPATH
+	 **/
+	//往指定的同源页面窗口加载样式文件（求url为相对于win中页面的地址）
+	z.loadCSS = z.loadCss = function (url, win) {
+		win = win && z.isWindow(win) ? win : window;
+		var document = win.document;
+
+		var head = document.getElementsByTagName('head')[0] || document.documentElement;
+		if (document.createStyleSheet) { //注意：IE11的不再支持document.createStyleSheet
+			document.createStyleSheet(url);
+		} else {
+			var e = document.createElement('link');
+			e.rel = 'stylesheet';
+			e.type = 'text/css';
+			e.href = url;
+			head.appendChild(e);
+		}
+	};
+
+	if (!/:\/\/(develop)/.test(location.href) || !Object.defineProperty) {
+		z.importCSS('components.css');
+		z.importJS('vendors.min.js');
+		z.importJS('components.min.js');
+	} else {
+		if (!window.require) {
+			// CommonJS在浏览器下的极简版实现，没有自动引入模块，没有管理依赖，请自行引入所有要用到的js文件。
+			var importCommonJS =function(url, alias, expose){
+				if (!/^\/|^\w+\:\/\//.test(url)) {
+					url = z.JSLIBPATH + url;
+				}
+				if (!document.body || document.readyState == 'loading') {
+					document.write('<script>require.lastScriptUrl="' + (alias||url) + '";<\/script>'
+						+'<script type="text/javascript" src="' + url + '"><\/script>'
+						+ (expose?'<script>window["'+expose+'"]=require.modules[require.lastScriptUrl];<\/script>':'')
+						);
+				} else {
+					console.error('仅在DOM没载入完成前才能执行importCommonJS方法');
+				}
+			}
+			var relative = function (url, p) {
+				var path = url.split('/');
+				var segs = p.split('/');
+				path.pop();
+				for (var i = 0; i < segs.length; i++) {
+					var seg = segs[i];
+					if ('..' == seg)
+						path.pop();
+					else if ('.' != seg)
+						path.push(seg);
+				}
+				return path.join('/');
+			};			
+			var require=window.require=window.__zving_require__=function(p) {
+				if(p.match(/\.\w+$/) && !p.match(/\.(js)$/i)){
+					return;
+				}
+				var path=p;
+				if ('.' == p.charAt(0)){
+					path = relative(require.lastScriptUrl, p);
+				}
+				var mod = require.modules[path];
+				if (!mod)
+					console.warn('failed to require "' + p + '"');
+				return mod;
+			}
+      
+			require.modules = {};
+			var module=window.module=window.__zving_module__={exports:{}};
+			var exports=window.exports=module.exports;
+			Object.defineProperty(module, 'exports', {
+				enumerable : true,
+				configurable : true,
+				get:function (obj) {
+					return exports;
+				},
+				set : function (obj) {
+					require.modules[require.lastScriptUrl] = obj;
+				}
+			})
+
+		}
+		z.importCSS('_source/css/msgpop.css');
+		z.importCSS('_source/css/tip.css');
+		z.importCSS('_source/css/dialog.css');
+		z.importCSS('_source/css/calendar.css');
+		z.importCSS('_source/css/editor.css');
+		z.importCSS('_source/css/webuploader.css');
+		if (!window.jQuery) {
+			importCommonJS('_source/core/jquery.js', 'jquery', '$');
+		}
+		if (!window._) {
+			importCommonJS('_source/core/lodash.js', 'lodash', '_');
+		}
+		var jsFiles = '';
+		jsFiles = 'core.js object.js function.js class.js helper.js string.js array.js date.js dateTime.js util.js dataTable.js dataCollection.js JSON.js eventEmitter.js observable.js prototype.js dom.js event.js eventManager.js allDocumentsEvent.js node.js jquery.event.js jquery.node.js jqueryUI.min.js url.js page.js ajaxPage.js drag.js cookie.js storage.js dataGSetter.js statable.js form.js';
+		jsFiles = jsFiles.split(/ +/);
+		for (i = 0; i < jsFiles.length; i++) {
+			importCommonJS('_source/core/' + jsFiles[i]);
+		}
+		jsFiles = 'zh-cn.js zh-tw.js en.js';
+		jsFiles = jsFiles.split(/ +/);
+		for (i = 0; i < jsFiles.length; i++) {
+			importCommonJS('_source/lang/' + jsFiles[i]);
+		}
+		jsFiles = 'lang.js server.js UIX.js console.js componentManager.js UICompBase.js tip.js msgPop.js verify.js layer.js dialog.js datePicker.js dataList.js webuploader.js uploader.js fieldEditor.js combox.js switchable.js suggest.js form.js button.js menu.js toolbar.js IEFix.js pageBar.js dataGrid.js dataGrid_plugins.js afloat.js tree.js tabPage.js panel.js progress.js layout.js splitter.js progressBar.js slider.js scrollBar.js scrollPanel.js numberField.js zRetouch.js';
+		jsFiles = jsFiles.split(/ +/);
+		for (i = 0; i < jsFiles.length; i++) {
+			importCommonJS('_source/components/' + jsFiles[i]);
+		}
+	}
+	z.importJS('../application.js');
+  
+}();

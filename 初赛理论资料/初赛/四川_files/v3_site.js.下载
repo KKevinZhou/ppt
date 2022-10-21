@@ -1,0 +1,45 @@
+//站点自定义javascript放到本文件
+  //高亮
+  var navCurrent= function(){
+    var cur = $("#CatalogInnerCode").val();
+    $(".header-nav li").each(function(){
+      var innercode = $(this).attr("attr");
+      if(!cur){
+        $(this).children('a').addClass("cur");
+        return false;
+      }else{
+        if(cur.indexOf(innercode)==0){
+          $(this).children('a').addClass("cur");
+          return false;
+        }
+      }
+    });
+  }
+  navCurrent();
+// 
+			$(".zk").bind("click",function(){
+							
+				$('.cbdw-conleft-img a').attr('href', $(this).attr('link'))
+				$('.cbdw-conleft-img img').attr('src', $(this).attr('logo'))
+				$(this).parent().siblings().children(".zp-context").each(function(){
+					if($(this).hasClass("ok")){
+						$(this).slideUp(500)
+						$(this).removeClass("ok")
+						$(this).addClass("no")
+					}
+				})
+				$(this).parent().addClass('cur')
+				$(this).parent().siblings().removeClass('cur')
+			if($(this).siblings(".zp-context").hasClass("no")){
+				$(this).siblings(".zp-context").addClass("ok")
+					$(this).siblings(".zp-context").removeClass("no")
+					$(this).siblings(".zp-context").slideDown(500)
+					return
+				}
+				if($(this).siblings(".zp-context").hasClass("ok")) {
+					$(this).siblings(".zp-context").slideUp(500)
+					$(this).siblings(".zp-context").removeClass("ok")
+					$(this).siblings(".zp-context").addClass("no")
+					return
+				}
+			})
